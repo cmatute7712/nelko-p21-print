@@ -1,0 +1,9 @@
+services:
+  p21-web:
+    build: .
+    container_name: p21-web
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    devices:
+      - /dev/rfcomm0:/dev/rfcomm0

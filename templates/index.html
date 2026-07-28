@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nelko P21 Studio</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <div><span class="mark">P21</span><h1>Label Studio</h1></div>
+    <nav>
+      <button id="newButton" class="ghost">New</button>
+      <button id="openButton" class="ghost">Open</button>
+      <button id="saveButton" class="ghost">Save project</button>
+      <button id="exportButton" class="ghost">Export PNG</button>
+      <input id="projectInput" type="file" accept=".p21label,.json,application/json" hidden>
+    </nav>
+  </header>
+
+  <main class="workspace">
+    <aside class="panel tools">
+      <p class="eyebrow">Elements</p>
+      <button id="addTextButton" class="tool"><span>T</span>Add text</button>
+      <button id="addImageButton" class="tool"><span>◩</span>Add image</button>
+      <input id="imageInput" type="file" accept="image/*" hidden>
+      <button id="deleteButton" class="tool danger"><span>×</span>Delete selected</button>
+
+      <div class="divider"></div>
+      <p class="eyebrow">Selected element</p>
+      <label>Text<textarea id="textField" rows="3"></textarea></label>
+      <div class="two-columns">
+        <label>Font size<input id="fontSizeField" type="number" min="6" max="96"></label>
+        <label>X<input id="xField" type="number" min="0" max="95"></label>
+        <label>Y<input id="yField" type="number" min="0" max="283"></label>
+        <label>Width<input id="widthField" type="number" min="1" max="96"></label>
+        <label>Height<input id="heightField" type="number" min="1" max="284"></label>
+      </div>
+      <button id="applyButton" class="secondary">Apply changes</button>
+    </aside>
+
+    <section class="stage-wrap">
+      <div class="stage-heading">
+        <div><p class="eyebrow">Canvas</p><h2>14 × 40 mm</h2></div>
+        <span>96 × 284 px</span>
+      </div>
+      <div class="stage"><canvas id="labelCanvas" width="192" height="568"></canvas></div>
+      <p class="hint">Select and drag elements directly on the label.</p>
+    </section>
+
+    <aside class="panel printer-panel">
+      <p class="eyebrow">Printer connection</p>
+      <label>Serial device
+        <div class="input-action"><input id="deviceField" placeholder="/dev/rfcomm0"><button id="refreshButton" title="Refresh ports">↻</button></div>
+      </label>
+      <div id="portList" class="port-list"></div>
+      <div class="two-columns">
+        <label>Density<input id="densityField" type="number" value="15" min="1" max="15"></label>
+        <label>Copies<input id="copiesField" type="number" value="1" min="1" max="99"></label>
+      </div>
+      <button id="printButton" class="primary">Print label</button>
+      <button id="statusButton" class="secondary">Check status</button>
+
+      <div class="divider"></div>
+      <p class="eyebrow">Device settings</p>
+      <label>Power-off timeout<select id="timeoutField"><option value="0">Never</option><option value="15">15 minutes</option><option value="30">30 minutes</option><option value="60">60 minutes</option></select></label>
+      <label class="toggle"><input id="beepField" type="checkbox" checked><span></span>Printer beep</label>
+      <button id="settingsButton" class="secondary">Apply settings</button>
+      <div class="button-row"><button id="configButton" class="ghost">Config</button><button id="batteryButton" class="ghost">Battery</button><button id="selfTestButton" class="ghost">Self-test</button></div>
+      <pre id="deviceOutput">Choose a serial device to begin.</pre>
+    </aside>
+  </main>
+  <div id="toast" role="status"></div>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
