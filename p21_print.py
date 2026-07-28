@@ -3,16 +3,49 @@
 """Script to print images and manage settings on a Nelko P21 label printer via serial connection."""
 
 import argparse
+import os
 import struct
 import sys
 from enum import IntEnum
 
 import serial
+from serial.tools import list_ports
 from packaging.version import Version
 from PIL import Image, ImageEnhance, ImageOps
 
 DEBUG = False
-SERIAL_DEVICE = "/dev/rfcomm0"
+SERIAL_DEVICE = None if os.name == "nt" else "/dev/rfcomm0"
+
+
+def parse_bool(value):
+    """Parse a human-friendly command-line boolean value."""
+    normalized = value.lower()
+    if normalized in ("true", "yes", "on", "1"):
+        return True
+    if normalized in ("false", "no", "off", "0"):
+        return False
+    raise argparse.ArgumentTypeError(
+        "expected true/false, yes/no, on/off, or 1/0"
+    )
+
+
+def positive_int(value):
+    parsed = int(value)
+    if parsed < 1:
+        raise argparse.ArgumentTypeError("must be at least 1")
+    return parsed
+
+
+def list_serial_devices():
+    """Print serial devices available through pyserial."""
+    ports = sorted(list_ports.comports(), key=lambda port: port.device)
+    if not ports:
+        print("No serial devices found.")
+        return
+
+    for port in ports:
+        details = port.description or "No description"
+        print(f"{port.device}: {details}")
 
 
 def crc16(data):
@@ -358,25 +391,36 @@ def build_print_command(imagedata, density, copies):
 
 
 def main():
+    global DEBUG, SERIAL_DEVICE
+
     parser = argparse.ArgumentParser(
         description="Print an image on a Nelko P21 label printer."
     )
     parser.add_argument(
         "--device",
-        help="The device to print to (defaults to /dev/rfcomm0)",
-        default="/dev/rfcomm0",
+        help=(
+            "Serial device to use (for example /dev/rfcomm0 or COM5). "
+            "Defaults to /dev/rfcomm0 on non-Windows systems; required on Windows."
+        ),
+        default=SERIAL_DEVICE,
+    )
+    parser.add_argument(
+        "--list-devices",
+        help="List available serial devices and exit",
+        action="store_true",
     )
     parser.add_argument("--image", help="The image file to print.")
     parser.add_argument(
         "--density",
         help="The density/darkness of the print (1-15, defaults to 15)",
         type=int,
+        choices=range(1, 16),
         default=15,
     )
     parser.add_argument(
         "--copies",
         help="The number of copies to print (defaults to 1)",
-        type=int,
+        type=positive_int,
         default=1,
     )
     parser.add_argument(
@@ -387,10 +431,16 @@ def main():
         "--battery", help="Get the printer battery level", action="store_true"
     )
     parser.add_argument(
-        "--timeout", help="Set the printer timeout in minutes (0, 15, 30, 60)", type=int
+        "--timeout",
+        help="Set the printer timeout in minutes (0, 15, 30, 60)",
+        type=int,
+        choices=(0, 15, 30, 60),
     )
     parser.add_argument(
-        "--beep", help="Enable or disable the printer beep (True, False)", type=bool
+        "--beep",
+        help="Enable or disable the printer beep (true/false)",
+        type=parse_bool,
+        metavar="BOOLEAN",
     )
     parser.add_argument("--selftest", help="Run a self-test print", action="store_true")
     parser.add_argument("--debug", help="Enable debug output", action="store_true")
@@ -405,12 +455,18 @@ def main():
         parser.print_help()
         return
 
+    if args.list_devices:
+        list_serial_devices()
+        return
+
     if args.device:
-        global SERIAL_DEVICE
         SERIAL_DEVICE = args.device
+    else:
+        parser.error(
+            "--device is required on Windows; use --list-devices to find the printer's COM port"
+        )
     if args.debug:
         print("Debug mode enabled.")
-        global DEBUG
         DEBUG = True
         print(f"Using serial device: {args.device}")
     if args.image:
@@ -427,12 +483,12 @@ def main():
     if args.battery:
         print("Printer battery status:")
         print(get_battery())
-    if args.timeout:
+    if args.timeout is not None:
         command = get_timeout_command(args.timeout)
         print(f"Setting timeout to {command} minutes.")
         send_command(command)
         print(get_config())
-    if args.beep:
+    if args.beep is not None:
         beep_command = get_beep_command(args.beep)
         send_command(beep_command)
         print(get_config())

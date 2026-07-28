@@ -1,15 +1,198 @@
-# Nelko P21 label printer script and acapture
-This is a wireshark capture of the bluetooth traffic of a Nelko P21 label printer and a resulting simple python script, that makes it possible to print labels without the offical app.
+# Nelko P21 label printer script and capture
 
-## Script usage
+This repository contains a Wireshark capture of the Bluetooth traffic from a Nelko P21 label printer and a simple Python script that makes it possible to print labels without the official app.
 
-The printer works over a Bluetooth classic connection using the serial protocol (sometimes called SPP or RFCOMM). To establish a connection to the printer power it on and pair it using any Bluetooth connection tool. Then create an RFCOMM connection, either by using your tool of choice or by using bluez' `rfcomm` cli tool:
+## Requirements
 
-```bash
-$ rfcomm connect /dev/rfcomm0 XX:XX:XX:XX:XX:XX
+- Python 3.10 or newer
+- A Nelko P21 paired through Bluetooth Classic
+- A serial Bluetooth connection using SPP/RFCOMM
+- Windows or Linux
+
+The script communicates directly with the serial port created for the printer's Bluetooth SPP service. On Linux it defaults to `/dev/rfcomm0`. On Windows, pass the printer's assigned COM port with `--device`.
+
+## Installation
+
+Clone the repository, create a virtual environment, and install the Python dependencies.
+
+On Windows (PowerShell):
+
+```powershell
+cd nelko-p21-print
+py -3.10 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
 ```
 
-Make sure to replace the `XX:XX...` part with the Bluetooth MAC of your printer. When the connection was successful, you can start the script. I recommend creating a virtual environment and installing the requirements via `pip`. The script will print a help screen on start.
+On Linux:
+
+```bash
+cd nelko-p21-print
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+```
+
+Display the available command-line options with:
+
+```bash
+python p21_print.py --help
+```
+
+## Finding available serial ports
+
+After pairing the printer, list the serial ports visible to Python:
+
+```bash
+python p21_print.py --list-devices
+```
+
+The output includes each port name and its operating-system description. Look for a Bluetooth or Nelko-related entry. If the description is ambiguous, compare the list before and after pairing or powering on the printer.
+
+## Connecting the printer on Windows
+
+1. Power on the Nelko P21.
+2. Open **Settings > Bluetooth & devices > Add device > Bluetooth** and pair the printer.
+3. Run `python p21_print.py --list-devices` to find the outgoing Bluetooth COM port, such as `COM5`.
+4. Pass that port to every command with `--device`:
+
+```powershell
+python p21_print.py --device COM5 --status
+python p21_print.py --device COM5 --image test-template.png
+```
+
+Windows creates and manages the Bluetooth serial connection, so an `rfcomm connect` command is not needed. If no suitable COM port appears, open **More Bluetooth settings**, inspect the **COM Ports** tab, and add an outgoing port for the printer's serial service if necessary.
+
+## Connecting the printer on Linux
+
+The printer works over a Bluetooth Classic serial connection, sometimes called SPP or RFCOMM. Power on the printer and pair it using your desktop Bluetooth settings, `bluetoothctl`, or another Bluetooth tool.
+
+Find the printer's Bluetooth MAC address, then create an RFCOMM serial connection:
+
+```bash
+sudo rfcomm connect /dev/rfcomm0 XX:XX:XX:XX:XX:XX
+```
+
+Replace `XX:XX:XX:XX:XX:XX` with the printer's Bluetooth MAC address. Keep this command running while using the printer. Open another terminal, activate the virtual environment, and run `p21_print.py` there.
+
+If the serial device is somewhere other than `/dev/rfcomm0`, specify it with `--device`:
+
+```bash
+python p21_print.py --device /dev/rfcomm1 --status
+```
+
+Your user must have permission to access the serial device. Depending on the Linux distribution, this may require membership in the `dialout` group or running the script with appropriate permissions.
+
+In all examples below, Windows users should add their COM port, such as `--device COM5`. Linux users need `--device` only when they are not using `/dev/rfcomm0`.
+
+## Printing an image
+
+Print one copy using the default density of 15:
+
+```bash
+python p21_print.py --image test-template.png
+```
+
+Print three copies at a lighter density:
+
+```bash
+python p21_print.py --image test-template.png --density 10 --copies 3
+```
+
+The current print command is designed for 14 x 40 mm labels. The script converts the image to grayscale, increases its contrast, rotates it when it is wider than tall, resizes it to fit within 96 x 284 pixels, and converts it to one-bit black and white using Floyd-Steinberg dithering.
+
+For predictable results, prepare portrait-oriented artwork with a 96:284 aspect ratio. High-contrast images, text, and line art generally print best. The `--density` setting ranges from 1 through 15; higher values produce a darker print.
+
+## Inspecting the printer
+
+Show the printer's readiness and information about the loaded label:
+
+```bash
+python p21_print.py --status
+```
+
+Show the printer resolution, firmware versions, timeout, and beep configuration:
+
+```bash
+python p21_print.py --config
+```
+
+Show the battery level and charging state:
+
+```bash
+python p21_print.py --battery
+```
+
+The printer may report 99% while connected to power. Unplug it to obtain a useful battery reading.
+
+Run the printer's built-in self-test:
+
+```bash
+python p21_print.py --selftest
+```
+
+Enable raw diagnostic information with `--debug`:
+
+```bash
+python p21_print.py --status --debug
+```
+
+Several read-only operations can be requested at once:
+
+```bash
+python p21_print.py --status --battery --config
+```
+
+## Changing printer settings
+
+Set the automatic power-off timeout to 15, 30, or 60 minutes:
+
+```bash
+python p21_print.py --timeout 30
+```
+
+Enable the printer beep:
+
+```bash
+python p21_print.py --beep True
+```
+
+Disable the printer beep with:
+
+```bash
+python p21_print.py --beep false
+```
+
+Boolean values may be written as `true`/`false`, `yes`/`no`, `on`/`off`, or `1`/`0`.
+
+Disable the automatic power-off timeout with:
+
+```bash
+python p21_print.py --timeout 0
+```
+
+## Command-line options
+
+| Option | Description |
+| --- | --- |
+| `--device PATH` | Serial device, such as `/dev/rfcomm0` or `COM5`; required on Windows |
+| `--list-devices` | List available serial ports and exit |
+| `--image FILE` | Image to print |
+| `--density 1-15` | Print darkness; defaults to `15` |
+| `--copies NUMBER` | Number of copies; defaults to `1` |
+| `--status` | Show printer and loaded-label status |
+| `--config` | Show device configuration |
+| `--battery` | Show battery and charging status |
+| `--timeout MINUTES` | Set timeout to `0`, `15`, `30`, or `60` minutes |
+| `--beep BOOLEAN` | Enable or disable the printer beep |
+| `--selftest` | Run the built-in self-test print |
+| `--debug` | Show additional serial and status information |
+
+## Current limitations
+
+- Printing is currently hard-coded for 14 x 40 mm labels and a 96 x 284-pixel bitmap.
+- A failed serial connection may lead to a secondary error because some callers expect a response from the printer.
+- Windows Bluetooth drivers may expose more than one COM port for a paired device. Use the outgoing port associated with the printer's serial service.
 
 ## The captured traffic and the printers protocol
 
