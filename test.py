@@ -1,60 +1,49 @@
-#!/usr/bin/env python3
+"""Unit tests for label rendering and printer command generation."""
 
-"""Test script for CRC-16 checksum validation."""
+import tempfile
+import unittest
+from pathlib import Path
 
-from crc import Calculator, Crc16
-
-def int_to_bytes_low(value):
-    """
-    Convert a 16-bit integer to a 2-byte array in little-endian format.
-    """
-    return bytes([(value >> 8) & 0xFF, value & 0xFF])
+from label_model import LabelDocument
+from printer import LABEL_HEIGHT, LABEL_WIDTH, build_print_command, crc16, image_to_bytes
 
 
-def get_crc16(data):
-    """
-    Compute the CRC-16 checksum for the given byte array using polynomial 0xA001.
-    """
-    crc = 0xFFFF
-    for byte in data:
-        crc ^= byte
-        for _ in range(8):
-            if crc & 0x1:  # If LSB is 1
-                crc = (crc >> 1) ^ 0xA001
-            else:
-                crc >>= 1
-    return int_to_bytes_low(crc)
+class LabelDocumentTests(unittest.TestCase):
+    def test_text_renders_and_round_trips(self):
+        document = LabelDocument()
+        element = document.add_text("Hello")
+        element.x = 4
+        element.y = 10
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "test.p21label"
+            document.save(path)
+            loaded = LabelDocument.load(path)
+
+        self.assertEqual(loaded.elements[0].text, "Hello")
+        self.assertEqual(loaded.render().size, (LABEL_WIDTH, LABEL_HEIGHT))
+        self.assertNotEqual(loaded.render().getbbox(), None)
+
+    def test_image_data_has_fixed_printer_size(self):
+        data = image_to_bytes(LabelDocument().render())
+        self.assertEqual(len(data), 3408)
 
 
-def judge_serial_number_is_ok(byte_array):
-    """
-    Check if the provided data has a valid CRC-16 checksum.
-    """
-    if len(byte_array) < 3:
-        raise ValueError("Input array must have at least 3 bytes.")
+class PrinterProtocolTests(unittest.TestCase):
+    def test_crc_known_value(self):
+        self.assertEqual(crc16(b"123456789"), bytes.fromhex("4b37"))
 
-    # Extract the main data and the checksum from the input
-    data = byte_array[:-2]
-    provided_checksum = byte_array[-2:]  # Last two bytes
+    def test_print_command_contains_settings_and_bitmap(self):
+        command = build_print_command(b"\xff" * 3408, density=9, copies=2)
+        self.assertIn(b"DENSITY 9\r\n", command)
+        self.assertTrue(command.endswith(b"PRINT 2\r\n"))
 
-    # Compute the CRC-16 checksum for the data
-    computed_checksum = get_crc16(data)
-    calculator = Calculator(Crc16.IBM)
-    # reverse byte order
-    data = data[::-1]
-    crc = calculator.checksum(data)
-
-    # Compare the computed checksum with the provided checksum
-    print(f"Computed checksum: {computed_checksum.hex()}")
-    print(f"Provided checksum: {provided_checksum.hex()}")
-    print(f"crc16 checksum: {hex(crc)}")
-    return computed_checksum == provided_checksum
+    def test_invalid_print_settings_are_rejected(self):
+        with self.assertRaises(ValueError):
+            build_print_command(b"", density=0, copies=1)
+        with self.assertRaises(ValueError):
+            build_print_command(b"", density=1, copies=0)
 
 
-# Example usage
-input_bytes = bytes.fromhex("200c011203000301121215280f0e0d22")
-
-if judge_serial_number_is_ok(input_bytes):
-    print("Checksum is valid.")
-else:
-    print("Checksum is invalid.")
+if __name__ == "__main__":
+    unittest.main()

@@ -1,43 +1,96 @@
 # Nelko P21 label printer script and capture
 
-This repository contains a Wireshark capture of the Bluetooth traffic from a Nelko P21 label printer and a simple Python script that makes it possible to print labels without the official app.
+This repository contains a cross-platform graphical label editor for the Nelko P21 printer, a command-line interface, and the original Wireshark protocol capture. It can compose text and images, save reusable label projects, export print-ready PNG files, and print without the official app.
+
+## Features
+
+- Visual 14 x 40 mm label canvas with a live monochrome preview
+- Text elements with editable content, size, and position
+- PNG, JPEG, BMP, and GIF image elements with editable size and position
+- Drag-to-position editing
+- Save and reopen `.p21label` project files
+- Export labels as 96 x 284-pixel PNG images
+- Windows COM port and Linux RFCOMM support
+- Printer status, battery, timeout, beep, density, copy count, and self-test controls
+- Command-line printing and administration for automation
 
 ## Requirements
 
-- Python 3.10 or newer
+- Python 3.9 or newer
 - A Nelko P21 paired through Bluetooth Classic
 - A serial Bluetooth connection using SPP/RFCOMM
 - Windows or Linux
+
+Tkinter is included with the standard Python installer on Windows. Some Linux distributions package it separately; for example, Debian and Ubuntu users can install it with `sudo apt install python3-tk`.
 
 The script communicates directly with the serial port created for the printer's Bluetooth SPP service. On Linux it defaults to `/dev/rfcomm0`. On Windows, pass the printer's assigned COM port with `--device`.
 
 ## Installation
 
-Clone the repository, create a virtual environment, and install the Python dependencies.
+The included launch scripts create a `.venv` virtual environment when it is missing, install the project requirements, and start the application. Run them again whenever you want to open the editor.
 
 On Windows (PowerShell):
 
 ```powershell
-cd nelko-p21-print
-py -3.10 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
+.\run.ps1
 ```
 
-On Linux:
+On Linux or macOS:
 
 ```bash
-cd nelko-p21-print
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements.txt
+chmod +x run.sh
+./run.sh
 ```
 
-Display the available command-line options with:
+Arguments are passed through to `p21_print.py`. For example, display the command-line help with:
+
+```powershell
+.\run.ps1 --help
+```
+
+## Starting the label editor
+
+Run the appropriate launcher without arguments:
+
+```powershell
+.\run.ps1
+```
 
 ```bash
-python p21_print.py --help
+./run.sh
 ```
+
+You can still start the GUI directly from an activated environment:
+
+```bash
+python p21_print.py --gui
+```
+
+On Windows, you can use `py p21_print.py` in place of `python p21_print.py`.
+
+## Editing a label
+
+1. Select **Add text** or **Add image** from the toolbar.
+2. Click an element in the preview to select it.
+3. Drag the selected element to reposition it, or enter exact X and Y coordinates in the properties panel.
+4. Edit text and font size, or set the maximum width and height of an image, then select **Apply changes**.
+5. Use **File > Save As** to save an editable `.p21label` project.
+6. Use **Export PNG** to create a 96 x 284-pixel rendered label without printing it.
+
+Coordinates and dimensions are measured in printer pixels. The P21 print area is 96 pixels wide by 284 pixels tall. Content outside the label bounds is clipped.
+
+Label project files contain the text and layout settings plus paths to imported images. Keep the source image files available at those paths when reopening a project.
+
+## Printing from the editor
+
+1. Pair and connect the printer using the Windows or Linux instructions below.
+2. Choose its serial port in the **Printer** panel. Select **Refresh** to rescan available ports.
+3. Set print density from 1 (lightest) to 15 (darkest) and choose the number of copies.
+4. Select **Status** to verify the connection, then select **Print**.
+
+Printer communication runs in a background thread so the editor remains responsive while waiting for the device. Connection and protocol errors are shown in an error dialog.
+
+Select **Settings...** to read printer configuration or battery status, change the power-off timeout and beep setting, or request a self-test print.
 
 ## Finding available serial ports
 
@@ -85,7 +138,7 @@ Your user must have permission to access the serial device. Depending on the Lin
 
 In all examples below, Windows users should add their COM port, such as `--device COM5`. Linux users need `--device` only when they are not using `/dev/rfcomm0`.
 
-## Printing an image
+## Printing an image from the command line
 
 Print one copy using the default density of 15:
 
@@ -99,7 +152,7 @@ Print three copies at a lighter density:
 python p21_print.py --image test-template.png --density 10 --copies 3
 ```
 
-The current print command is designed for 14 x 40 mm labels. The script converts the image to grayscale, increases its contrast, rotates it when it is wider than tall, resizes it to fit within 96 x 284 pixels, and converts it to one-bit black and white using Floyd-Steinberg dithering.
+The current print command is designed for 14 x 40 mm labels. It resizes the supplied image to 96 x 284 pixels and converts it to one-bit black and white using Floyd-Steinberg dithering. Use the GUI or export a correctly sized PNG first when preserving the source image's aspect ratio is important.
 
 For predictable results, prepare portrait-oriented artwork with a 96:284 aspect ratio. High-contrast images, text, and line art generally print best. The `--density` setting ranges from 1 through 15; higher values produce a darker print.
 
@@ -175,7 +228,8 @@ python p21_print.py --timeout 0
 
 | Option | Description |
 | --- | --- |
-| `--device PATH` | Serial device, such as `/dev/rfcomm0` or `COM5`; required on Windows |
+| `--gui` | Open the graphical label editor |
+| `--device PATH` | Serial device, such as `/dev/rfcomm0` or `COM5`; required for Windows CLI printer commands |
 | `--list-devices` | List available serial ports and exit |
 | `--image FILE` | Image to print |
 | `--density 1-15` | Print darkness; defaults to `15` |
@@ -191,8 +245,8 @@ python p21_print.py --timeout 0
 ## Current limitations
 
 - Printing is currently hard-coded for 14 x 40 mm labels and a 96 x 284-pixel bitmap.
-- A failed serial connection may lead to a secondary error because some callers expect a response from the printer.
 - Windows Bluetooth drivers may expose more than one COM port for a paired device. Use the outgoing port associated with the printer's serial service.
+- `.p21label` files reference imported images by absolute path rather than embedding them.
 
 ## The captured traffic and the printers protocol
 
